@@ -85,10 +85,10 @@ int createSocket(char *ip, int port)
 
 int authenticate(const char *user, const char *password, const int socket)
 {
-    char usr[5 + strlen(user) + 1];
-    char pass[5 + strlen(pass) + 1];
-    sprintf(usr, "user %s\n", user);
-    sprintf(pass, "pass %s\n", password);
+    char usr[5 + strlen(user) + 2];
+    char pass[5 + strlen(pass) + 2];
+    sprintf(usr, "user %s\r\n", user);
+    sprintf(pass, "pass %s\r\n", password);
     char answer[MAX_LENGTH]; // 512
 
     write(socket, usr, strlen(usr));
@@ -102,101 +102,67 @@ int authenticate(const char *user, const char *password, const int socket)
     return readResp(socket, answer);
 }
 
-// Only handles single line responses
-int readResp(const int socket, char *buffer)
-{
+// temporary solution until response from the teacher
+// this function gets the last response code basically
+int readResponse(const int socket, char* buffer) {
+
+    char byte;
+    int index = 0, responseCode;
+    ResponseState state = START;
     memset(buffer, 0, MAX_LENGTH);
-    int bytesRead = read(socket, buffer, MAX_LENGTH - 1);
-    if (bytesRead <= 0)
-    {
-        perror("Error reading from socket");
-        exit(-1);
+
+    while (state != END) {
+        
+        read(socket, &byte, 1);
+        switch (state) {
+            case START:
+                if (byte == ' ') state = SINGLE;
+                else if (byte == '-') state = MULTIPLE;
+                else if (byte == '\n') state = END;
+                else buffer[index++] = byte;
+                break;
+            case SINGLE:
+                if (byte == '\n') state = END;
+                else buffer[index++] = byte;
+                break;
+            case MULTIPLE:
+                if (byte == '\n') {
+                    memset(buffer, 0, MAX_LENGTH);
+                    state = START;
+                    index = 0;
+                }
+                else buffer[index++] = byte;
+                break;
+            case END:
+                break;
+            default:
+                break;
+        }
     }
-    buffer[bytesRead] = '\0';
-    int respondeCode;
-    sscanf(buffer, "%d", &responseCode);
+
+    sscanf(buffer, RESPCODE_REGEX, &responseCode);
     return responseCode;
 }
 
-int readResponse(const int socket, char *buffer)
-{
-    char tempBuffer[MAX_LENGTH]; // Temporary buffer for each read
-    memset(buffer, 0, MAX_LENGTH);
+int startPassiveMode(const int socket, char *ip, int *port) {
+    char answer[MAX_LENGTH];
+    int ip_p1, ip_p2, ip_p3, ip_p4, port1, port2;
 
-    int bytesRead, totalRead = 0;
-    int responseCode = 0;
-    int isMultiLine = 0;
+    write(socket, "pasv\n", 5);
+    if (readResponse(socket, answer) != SV_PASSIVE) return -1;
+    sscanf(answer, PASSIVE_REGEX, &ip_p1, &ip_p2, &ip_p3, &ip_p4, &port1, &port2);
 
-    while ((bytesRead = read(socket, tempBuffer, sizeof(tempBuffer) - 1)) > 0)
-    {
-        // Prevent buffer overflow by checking before adding more data
-        if (totalRead + bytesRead >= MAX_LENGTH)
-        {
-            bytesRead = MAX_LENGTH - totalRead;
-            fprintf(stderr, "Response exceeds MAX_LENGTH. Truncated.\n");
-        }
+    *port = port1 * 256 + port2;
+    sprintf(ip, "%d.%d.%d.%d", &ip_p1, &ip_p2, &ip_p3, &ip_p4);
 
-        // Append the new data to the buffer
-        memcpy(buffer + totalRead, tempBuffer, bytesRead);
-        totalRead += bytesRead;
-        buffer[totalRead] = '\0'; // Null-terminate the buffer
+    return 0;
+}
 
-        // Process the buffer line by line
-        char *start = buffer;
-        while (start != NULL && *start != '\0')
-        {
-            char *end = strstr(start, "\r\n"); // Look for the line terminator
-            if (end != NULL)
-            {
-                int lineLength = end - start;
-                char line[MAX_LENGTH];
-                strncpy(line, start, lineLength); // Extract the line
-                line[lineLength] = '\0';
+int requestResource(const int socket, char *resource) {
+    char file[5+strlen(resource)+2];
+    char answer[MAX_LENGTH];
 
-                // Process the line
-                if (responseCode == 0)
-                {
-                    sscanf(line, "%d", &responseCode);
-                    if (line[3] == '-')
-                    {
-                        isMultiLine = 1; // Multi-line response detected
-                    }
-                }
-
-                // Append the line to the buffer for readability
-                if (totalRead < MAX_LENGTH)
-                {
-                    strcat(buffer, line);
-                    strcat(buffer, "\n");
-                }
-
-                // Check if we've reached the last line of the multi-line response
-                if (isMultiLine && line[3] == ' ' && strncmp(line, buffer, 3) == 0)
-                {
-                    return responseCode;
-                }
-
-                start = end + 2; // Move past "\r\n"
-            }
-            else
-            {
-                // If no "\r\n" found, break out to avoid infinite loop
-                break;
-            }
-        }
-
-        // If the buffer is full, break the loop to prevent further reading
-        if (totalRead >= MAX_LENGTH)
-        {
-            break;
-        }
-    }
-
-    if (bytesRead < 0)
-    {
-        perror("Error reading from socket");
-        return -1;
-    }
-
-    return responseCode;
+    sprintf(file, "retr %s\r\n", resource);
+    write(socket, file, sizeof(file));
+    return readResponse(socket, answer);
 }
