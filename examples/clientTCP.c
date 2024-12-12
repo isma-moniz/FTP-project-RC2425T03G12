@@ -22,7 +22,7 @@ int main(int argc, char **argv) {
     struct sockaddr_in server_addr;
     char buf[] = "Mensagem de teste na travessia da pilha TCP/IP\n";
     size_t bytes;
-
+    
     /*server address handling*/
     bzero((char *) &server_addr, sizeof(server_addr));
     server_addr.sin_family = AF_INET;

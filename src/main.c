@@ -1,13 +1,12 @@
 #include <../include/FTP.h>
 
-
 int parseFTPUrl(const char *input, struct URL *url) {
     regex_t regex;
     struct hostent *h;
 
     // Validate the URL structure
     if (regcomp(&regex, SLASH, 0) != 0 || regexec(&regex, input, 0, NULL, 0) != 0) {
-        return -1;
+        exit(-1);
     }
 
     // Check for user:password in URL
@@ -32,7 +31,7 @@ int parseFTPUrl(const char *input, struct URL *url) {
     // Resolve host to IP address
     if (strlen(url->host) == 0 || (h = geshostbyname(url->host)) == NULL) {
         fprintf(stderr, "Invalid hostname: '%s'\n", url->host);
-        return -1;
+        exit(-1);
     }
     
     strcpy(url->ip, inet_ntoa(*((struct in_addr *)h->h_addr)));
@@ -40,8 +39,48 @@ int parseFTPUrl(const char *input, struct URL *url) {
     // Validate URL components
     if (!strlen(url->host) || !strlen(url->user) || !strlen(url->password) || 
         !strlen(url->resource) || !strlen(url->file)) {
-        return -1;
+        exit(-1);
     }
 
     return 0;
+}
+
+int createSocket(const char *hostname, int port) {
+    int sockfd;
+    struct hostent *host;
+    struct sockaddr_in serverAddr;
+
+    // Resolve hostname to IP address
+    if ((host = gethostbyname(hostname)) == NULL) {
+        fprintf(stderr, "Error: Could not resolve hostname '%s'\n", hostname);
+        exit(-1);
+    }
+
+    // Server address handling
+    memset(&serverAddr, 0, sizeof(serverAddr));
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(port); // to network byte order
+    memcpy(&serverAddr.sin_addr, host->h_addr, host->h_length);
+
+    // Create the TCP socket
+    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        perror("Error: could not create socket");
+        exit(-1);
+    }
+
+    // Connect to the server
+    if (connect(sockfd,
+                (struct sockaddr *) &serverAddr,
+                sizeof(serverAddr)) < 0) {
+        perror("Error: Could not connect to the server");
+        
+        if (close(sockfd)<0) {
+            perror("close()");
+            exit(-1);
+        }
+
+        exit(-1);
+    }
+
+    return sockfd;
 }
