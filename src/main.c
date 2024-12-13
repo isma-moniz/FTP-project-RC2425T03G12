@@ -104,14 +104,15 @@ int authenticate(const char *user, const char *password, const int socket)
 }
 
 int readResponse(const int socket, char* buffer) {
+    memset(buffer, 0, BUFFER_SIZE);
     char recv_buffer[BUFFER_SIZE] = {0};
     char line_buffer[BUFFER_SIZE * 5] = {0}; // allow for a huge line just in case 
     char response[BUFFER_SIZE * 10] = {0};
     int code = 0;
-    int is_multi_line = 0;
+    int is_multi_line = 0; // Initialize to avoid using uninitialized value
 
     while (1) {
-        // read BUFFER_SIZE (512 atm) bytes from the socket and put them in buffer
+        // Read BUFFER_SIZE (512 atm) bytes from the socket and put them in buffer
         ssize_t bytes_received = recv(socket, recv_buffer, BUFFER_SIZE - 1, 0);
         if (bytes_received < 0) {
             printf("Error: Error reading from socket.\n");
@@ -119,8 +120,13 @@ int readResponse(const int socket, char* buffer) {
         } else if (bytes_received == 0) break;
 
         recv_buffer[bytes_received] = '\0';
-        
-        strcat(line_buffer, recv_buffer);
+
+        // Ensure line_buffer doesn't overflow
+        if (strlen(line_buffer) + strlen(recv_buffer) >= sizeof(line_buffer)) {
+            printf("Error: Line buffer overflow.\n");
+            return -1;
+        }
+        strncat(line_buffer, recv_buffer, sizeof(line_buffer) - strlen(line_buffer) - 1);
 
         char *line_start = line_buffer;
         char *line_end = NULL;
@@ -130,24 +136,32 @@ int readResponse(const int socket, char* buffer) {
 
             if (sscanf(line_start, "%3d", &code) == 1) {
                 if (strstr(line_start, "-") == line_start + 3) {
-                    is_multi_line =1;
+                    is_multi_line = 1;
                 } else if (is_multi_line && strstr(line_start, " ") == line_start + 3) {
-                    strcat(buffer, line_start);
-                    strcat(buffer, "\n");
-                    strcat(response, line_start);
-                    strcat(response, "\n");
-                    printf("Server response:\n%s\n", response);
-                    return code;
-                } else {
-                    strcat(response, line_start);
-                    strcat(response, "\n");
+                    is_multi_line = 0; // Reset multi-line flag
+                }
+                if (strlen(buffer) + strlen(line_start) + 2 >= BUFFER_SIZE) {
+                    printf("Error: Buffer overflow.\n");
+                    return -1;
+                }
+                strncat(buffer, line_start, BUFFER_SIZE - strlen(buffer) - 2);
+                strncat(buffer, "\n", BUFFER_SIZE - strlen(buffer) - 1);
+
+                if (!is_multi_line) {
+                    strncat(response, line_start, sizeof(response) - strlen(response) - 2);
+                    strncat(response, "\n", sizeof(response) - strlen(response) - 1);
                     printf("Server response:\n%s\n", response);
                     return code;
                 }
             }
 
-            strcat(response, line_start);
-            strcat(response, "\n");
+            if (strlen(response) + strlen(line_start) + 2 >= sizeof(response)) {
+                printf("Error: Response buffer overflow.\n");
+                return -1;
+            }
+            strncat(response, line_start, sizeof(response) - strlen(response) - 2);
+            strncat(response, "\n", sizeof(response) - strlen(response) - 1);
+
             line_start = line_end + 1;
         }
 
@@ -156,6 +170,7 @@ int readResponse(const int socket, char* buffer) {
     printf("Server response:\n%s\n", response);
     return code;
 }
+
 
 int startPassiveMode(const int socket, char *ip, int *port) {
     char answer[BUFFER_SIZE];
