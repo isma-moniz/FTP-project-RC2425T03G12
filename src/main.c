@@ -1,4 +1,4 @@
-#include <../include/FTP.h>
+#include "../include/FTP.h"
 
 int parseFTPUrl(const char *input, struct URL *url)
 {
@@ -17,14 +17,14 @@ int parseFTPUrl(const char *input, struct URL *url)
     {
         // URL without user:password
         sscanf(input, HOST_REGEX, url->host);
-        strcpy(url->user, DEFAULT_USER);
+        strcpy(url->username, DEFAULT_USER);
         strcpy(url->password, DEFAULT_PASSWORD);
     }
     else
     {
         // URL with user:password
         sscanf(input, HOST_AT_REGEX, url->host);
-        sscanf(input, USER_REGEX, url->user);
+        sscanf(input, USER_REGEX, url->username);
         sscanf(input, PASS_REGEX, url->password);
     }
 
@@ -35,16 +35,16 @@ int parseFTPUrl(const char *input, struct URL *url)
         strcpy(url->file, fileName + 1);
 
     // Resolve host to IP address
-    if (strlen(url->host) == 0 || (h = geshostbyname(url->host)) == NULL)
+    if (strlen(url->host) == 0 || (h = gethostbyname(url->host)) == NULL)
     {
         fprintf(stderr, "Invalid hostname: '%s'\n", url->host);
         exit(-1);
     }
 
-    strcpy(url->ip, inet_ntoa(*((struct in_addr *)h->h_addr)));
+    strcpy(url->ip, inet_ntoa(*((struct in_addr *) h->h_addr)));
 
     // Validate URL components
-    if (!strlen(url->host) || !strlen(url->user) || !strlen(url->password) ||
+    if (!strlen(url->host) || !strlen(url->username) || !strlen(url->password) ||
         !strlen(url->resource) || !strlen(url->file))
     {
         exit(-1);
@@ -86,24 +86,25 @@ int createSocket(char *ip, int port)
 int authenticate(const char *user, const char *password, const int socket)
 {
     char usr[5 + strlen(user) + 2];
-    char pass[5 + strlen(pass) + 2];
+    char pass[5 + strlen(password) + 2];
     sprintf(usr, "user %s\r\n", user);
     sprintf(pass, "pass %s\r\n", password);
     char answer[MAX_LENGTH]; // 512
 
     write(socket, usr, strlen(usr));
-    if (readResp(socket, answer) != SV_READYFORPASSWORD)
+    if (readResponse(socket, answer) != HOST_PASS_READY)
     {
         printf("Unknown user '%s'\n", user);
         exit(-1);
     }
 
     write(socket, pass, strlen(pass));
-    return readResp(socket, answer);
+    return readResponse(socket, answer);
 }
 
-// temporary solution until response from the teacher
-// this function gets the last response code basically
+// TODO: temporary solution until response from the teacher
+// this function is not mine and i will remove it
+// gets the last response code basically
 int readResponse(const int socket, char* buffer) {
 
     char byte;
@@ -149,11 +150,11 @@ int startPassiveMode(const int socket, char *ip, int *port) {
     int ip_p1, ip_p2, ip_p3, ip_p4, port1, port2;
 
     write(socket, "pasv\n", 5);
-    if (readResponse(socket, answer) != SV_PASSIVE) return -1;
+    if (readResponse(socket, answer) != PASSIVE) return -1;
     sscanf(answer, PASSIVE_REGEX, &ip_p1, &ip_p2, &ip_p3, &ip_p4, &port1, &port2);
 
     *port = port1 * 256 + port2;
-    sprintf(ip, "%d.%d.%d.%d", &ip_p1, &ip_p2, &ip_p3, &ip_p4);
+    sprintf(ip, "%d.%d.%d.%d", ip_p1, ip_p2, ip_p3, ip_p4);
 
     return 0;
 }
@@ -165,4 +166,40 @@ int requestResource(const int socket, char *resource) {
     sprintf(file, "retr %s\r\n", resource);
     write(socket, file, sizeof(file));
     return readResponse(socket, answer);
+}
+
+int downloadResource(const int socket1, const int socket2, char* filename) {
+    FILE* fd = fopen(filename, "wb");
+    char buffer[MAX_LENGTH];
+    int bytes;
+
+    if (fd == NULL) {
+        printf("Error: could not open file %s.\n", filename);
+        exit(-1);
+    }
+
+    while ((bytes = read(socket2, buffer, MAX_LENGTH)) > 0) {
+        if (fwrite(buffer, bytes, 1, fd) < 0) 
+            return -1;
+    }
+    fclose(fd);
+
+    return readResponse(socket1, buffer);
+}
+
+int endFTP(const int socket1, const int socket2) {
+    char answer[MAX_LENGTH];
+    write(socket1, "quit\r\n", 6);
+    if (readResponse(socket1, answer) != CLOSE_CONNECTION) {
+        printf("Error: could not terminate connection.\n");
+        exit(-1);
+    }
+    return close(socket1) || close(socket2);
+}
+
+int main(int argc, char* argv[]) {
+    if (argc != 2) {
+        printf("Usage: ./download ftp://[<user>:<password>@]<host>/<url-path>\n");
+        exit(-1);
+    } 
 }
