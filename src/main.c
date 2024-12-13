@@ -90,6 +90,7 @@ int authenticate(const char *user, const char *password, const int socket)
     sprintf(usr, "user %s\r\n", user);
     sprintf(pass, "pass %s\r\n", password);
     char answer[BUFFER_SIZE]; // 512
+    memset(answer, 0, sizeof(answer));
 
     write(socket, usr, strlen(usr));
     if (readResponse(socket, answer) != HOST_PASS_READY)
@@ -103,11 +104,11 @@ int authenticate(const char *user, const char *password, const int socket)
 }
 
 int readResponse(const int socket, char* buffer) {
-    char recv_buffer[BUFFER_SIZE];
+    char recv_buffer[BUFFER_SIZE] = {0};
     char line_buffer[BUFFER_SIZE * 5] = {0}; // allow for a huge line just in case 
     char response[BUFFER_SIZE * 10] = {0};
     int code = 0;
-    int is_multi_line;
+    int is_multi_line = 0;
 
     while (1) {
         // read BUFFER_SIZE (512 atm) bytes from the socket and put them in buffer
@@ -182,6 +183,7 @@ int requestResource(const int socket, char *resource) {
 int downloadResource(const int socket1, const int socket2, char* filename) {
     FILE* fd = fopen(filename, "wb");
     char buffer[BUFFER_SIZE];
+    memset(buffer, 0, sizeof(buffer));
     int bytes;
 
     if (fd == NULL) {
@@ -195,6 +197,7 @@ int downloadResource(const int socket1, const int socket2, char* filename) {
     }
     fclose(fd);
     close(socket2);
+    memset(buffer, 0, sizeof(buffer));
 
     return readResponse(socket1, buffer);
 }
