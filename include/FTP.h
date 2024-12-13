@@ -12,14 +12,14 @@
 #define MAX_LENGTH 512
 #define FTP_PORT   21
 
-#define DEFAULT_USER        "rcom"
-#define DEFAULT_PASSWORD    "rcom"
+#define DEFAULT_USER        "anonymous"
+#define DEFAULT_PASSWORD    "password"
 
 // Parser regex
 #define AT              "@"
+#define SLASH           "/"
 #define HOST_REGEX      "%*[^/]//%[^/]"
 #define HOST_AT_REGEX   "%*[^/]//%*[^@]@%[^/]"
-#define SLASH           "/"
 #define RESOURCE_REGEX  "%*[^/]//%*[^/]/%s"
 #define USER_REGEX      "%*[^/]//%[^:/]"
 #define PASS_REGEX      "%*[^/]//%*[^:]:%[^@\n$]"

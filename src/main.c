@@ -102,9 +102,6 @@ int authenticate(const char *user, const char *password, const int socket)
     return readResponse(socket, answer);
 }
 
-// TODO: temporary solution until response from the teacher
-// this function is not mine and i will remove it
-// gets the last response code basically
 int readResponse(const int socket, char* buffer) {
 
     char byte;
@@ -149,14 +146,14 @@ int startPassiveMode(const int socket, char *ip, int *port) {
     char answer[MAX_LENGTH];
     int ip_p1, ip_p2, ip_p3, ip_p4, port1, port2;
 
-    write(socket, "pasv\n", 5);
+    write(socket, "pasv\r\n", 6);
     if (readResponse(socket, answer) != PASSIVE) return -1;
     sscanf(answer, PASSIVE_REGEX, &ip_p1, &ip_p2, &ip_p3, &ip_p4, &port1, &port2);
 
     *port = port1 * 256 + port2;
     sprintf(ip, "%d.%d.%d.%d", ip_p1, ip_p2, ip_p3, ip_p4);
 
-    return 0;
+    return PASSIVE;
 }
 
 int requestResource(const int socket, char *resource) {
