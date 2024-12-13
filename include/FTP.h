@@ -26,10 +26,13 @@
 #define RESPCODE_REGEX  "%d"
 #define PASSIVE_REGEX   "%*[^(](%d,%d,%d,%d,%d,%d)%*[^\n$)]"
 
-#define HOST_PASS_READY     331
+#define HOST_TRANSFER_READY 150
 #define HOST_AUTH_READY     220
-#define PASSIVE             227
 #define CLOSE_CONNECTION    221
+#define HOST_TRANSFER_DONE  226
+#define PASSIVE             227
+#define HOST_LOGGED_IN      230
+#define HOST_PASS_READY     331
 
 // Struct for storing url parser output
 struct URL {
