@@ -89,7 +89,7 @@ int authenticate(const char *user, const char *password, const int socket)
     char pass[5 + strlen(password) + 2];
     sprintf(usr, "user %s\r\n", user);
     sprintf(pass, "pass %s\r\n", password);
-    char answer[MAX_LENGTH]; // 512
+    char answer[BUFFER_SIZE]; // 512
 
     write(socket, usr, strlen(usr));
     if (readResponse(socket, answer) != HOST_PASS_READY)
@@ -103,47 +103,61 @@ int authenticate(const char *user, const char *password, const int socket)
 }
 
 int readResponse(const int socket, char* buffer) {
+    char recv_buffer[BUFFER_SIZE];
+    char line_buffer[BUFFER_SIZE * 5] = {0}; // allow for a huge line just in case 
+    char response[BUFFER_SIZE * 10] = {0};
+    int code = 0;
+    int is_multi_line;
 
-    char byte;
-    int index = 0, responseCode;
-    ResponseState state = START;
-    memset(buffer, 0, MAX_LENGTH);
+    while (1) {
+        // read BUFFER_SIZE (512 atm) bytes from the socket and put them in buffer
+        ssize_t bytes_received = recv(socket, recv_buffer, BUFFER_SIZE - 1, 0);
+        if (bytes_received < 0) {
+            printf("Error: Error reading from socket.\n");
+            return -1;
+        } else if (bytes_received == 0) break;
 
-    while (state != END) {
+        recv_buffer[bytes_received] = '\0';
         
-        read(socket, &byte, 1);
-        switch (state) {
-            case START:
-                if (byte == ' ') state = SINGLE;
-                else if (byte == '-') state = MULTIPLE;
-                else if (byte == '\n') state = END;
-                else buffer[index++] = byte;
-                break;
-            case SINGLE:
-                if (byte == '\n') state = END;
-                else buffer[index++] = byte;
-                break;
-            case MULTIPLE:
-                if (byte == '\n') {
-                    memset(buffer, 0, MAX_LENGTH);
-                    state = START;
-                    index = 0;
-                }
-                else buffer[index++] = byte;
-                break;
-            case END:
-                break;
-            default:
-                break;
-        }
-    }
+        strcat(line_buffer, recv_buffer);
 
-    sscanf(buffer, RESPCODE_REGEX, &responseCode);
-    return responseCode;
+        char *line_start = line_buffer;
+        char *line_end = NULL;
+
+        while ((line_end = strchr(line_start, '\n')) != NULL) {
+            *line_end = '\0';
+
+            if (sscanf(line_start, "%3d", &code) == 1) {
+                if (strstr(line_start, "-") == line_start + 3) {
+                    is_multi_line =1;
+                } else if (is_multi_line && strstr(line_start, " ") == line_start + 3) {
+                    strcat(buffer, line_start);
+                    strcat(buffer, "\n");
+                    strcat(response, line_start);
+                    strcat(response, "\n");
+                    printf("Server response:\n%s\n", response);
+                    return code;
+                } else {
+                    strcat(response, line_start);
+                    strcat(response, "\n");
+                    printf("Server response:\n%s\n", response);
+                    return code;
+                }
+            }
+
+            strcat(response, line_start);
+            strcat(response, "\n");
+            line_start = line_end + 1;
+        }
+
+        memmove(line_buffer, line_start, strlen(line_start) + 1);
+    }
+    printf("Server response:\n%s\n", response);
+    return code;
 }
 
 int startPassiveMode(const int socket, char *ip, int *port) {
-    char answer[MAX_LENGTH];
+    char answer[BUFFER_SIZE];
     int ip_p1, ip_p2, ip_p3, ip_p4, port1, port2;
 
     write(socket, "pasv\r\n", 6);
@@ -158,7 +172,7 @@ int startPassiveMode(const int socket, char *ip, int *port) {
 
 int requestResource(const int socket, char *resource) {
     char file[5+strlen(resource)+2];
-    char answer[MAX_LENGTH];
+    char answer[BUFFER_SIZE];
 
     sprintf(file, "retr %s\r\n", resource);
     write(socket, file, sizeof(file));
@@ -167,7 +181,7 @@ int requestResource(const int socket, char *resource) {
 
 int downloadResource(const int socket1, const int socket2, char* filename) {
     FILE* fd = fopen(filename, "wb");
-    char buffer[MAX_LENGTH];
+    char buffer[BUFFER_SIZE];
     int bytes;
 
     if (fd == NULL) {
@@ -175,7 +189,7 @@ int downloadResource(const int socket1, const int socket2, char* filename) {
         exit(-1);
     }
 
-    while ((bytes = read(socket2, buffer, MAX_LENGTH)) > 0) {
+    while ((bytes = read(socket2, buffer, BUFFER_SIZE)) > 0) {
         if (fwrite(buffer, bytes, 1, fd) < 0) 
             return -1;
     }
@@ -185,7 +199,7 @@ int downloadResource(const int socket1, const int socket2, char* filename) {
 }
 
 int endFTP(const int socket1, const int socket2) {
-    char answer[MAX_LENGTH];
+    char answer[BUFFER_SIZE];
     write(socket1, "quit\r\n", 6);
     if (readResponse(socket1, answer) != CLOSE_CONNECTION) {
         printf("Error: could not terminate connection.\n");
@@ -210,7 +224,7 @@ int main(int argc, char* argv[]) {
     printf("Connecting to host: %s\nResource: %s\nFile: %s\nUser: %s\nPassword: %s\nIP Address: %s\n", 
     host_url.host, host_url.resource, host_url.file, host_url.username, host_url.password, host_url.ip);
 
-    char answer[MAX_LENGTH];
+    char answer[BUFFER_SIZE];
     int socketControl = createSocket(host_url.ip, FTP_PORT);
     if (readResponse(socketControl, answer) != HOST_AUTH_READY || socketControl < 0) {
         printf("Error: could not create socket to port %d with ip %s\n", FTP_PORT, host_url.ip);
@@ -226,7 +240,7 @@ int main(int argc, char* argv[]) {
     printf("Authenticated. Requesting passive mode.\n");
 
     int port;
-    char ip[MAX_LENGTH];
+    char ip[BUFFER_SIZE];
     if (startPassiveMode(socketControl, ip, &port) != PASSIVE) {
         printf("Error: Could not start passive mode.\n");
         exit(-1);

@@ -9,7 +9,7 @@
 #include <termios.h>
 #include <regex.h>
 
-#define MAX_LENGTH 512
+#define BUFFER_SIZE 1024
 #define FTP_PORT   21
 
 #define DEFAULT_USER        "anonymous"
@@ -36,12 +36,12 @@
 
 // Struct for storing url parser output
 struct URL {
-    char host[MAX_LENGTH];
-    char resource[MAX_LENGTH];
-    char file[MAX_LENGTH];
-    char username[MAX_LENGTH];
-    char password[MAX_LENGTH];
-    char ip[MAX_LENGTH];
+    char host[BUFFER_SIZE];
+    char resource[BUFFER_SIZE];
+    char file[BUFFER_SIZE];
+    char username[BUFFER_SIZE];
+    char password[BUFFER_SIZE];
+    char ip[BUFFER_SIZE];
 };
 
 
