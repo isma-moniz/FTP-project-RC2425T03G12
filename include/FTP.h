@@ -27,6 +27,7 @@
 #define PASSIVE_REGEX   "%*[^(](%d,%d,%d,%d,%d,%d)%*[^\n$)]"
 
 #define HOST_TRANSFER_READY 150
+#define DATA_ALREADY_OPEN   125
 #define HOST_AUTH_READY     220
 #define CLOSE_CONNECTION    221
 #define HOST_TRANSFER_DONE  226

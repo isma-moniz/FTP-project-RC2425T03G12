@@ -188,12 +188,13 @@ int downloadResource(const int socket1, const int socket2, char* filename) {
         printf("Error: could not open file %s.\n", filename);
         exit(-1);
     }
-
-    while ((bytes = read(socket2, buffer, BUFFER_SIZE)) > 0) {
+    
+    while ((bytes = recv(socket2, buffer, BUFFER_SIZE, 0)) > 0) {
         if (fwrite(buffer, bytes, 1, fd) < 0) 
             return -1;
     }
     fclose(fd);
+    close(socket2);
 
     return readResponse(socket1, buffer);
 }
@@ -205,7 +206,7 @@ int endFTP(const int socket1, const int socket2) {
         printf("Error: could not terminate connection.\n");
         exit(-1);
     }
-    return close(socket1) || close(socket2);
+    return close(socket1);
 }
 
 int main(int argc, char* argv[]) {
@@ -255,7 +256,8 @@ int main(int argc, char* argv[]) {
     }
 
     printf("Requesting resource at %s\n", host_url.resource);
-    if (requestResource(socketControl, host_url.resource) != HOST_TRANSFER_READY) {
+    int response = requestResource(socketControl, host_url.resource);
+    if ((response != HOST_TRANSFER_READY) && (response != DATA_ALREADY_OPEN)) {
         printf("Error: Resource request failed.\n");
         exit(-1);
     }
