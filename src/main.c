@@ -1,5 +1,12 @@
 #include "../include/FTP.h"
 
+/**
+ * @brief Parses FTP url provided by the user to a URL struct
+ * 
+ * @param input the user URL input in the form of a char array
+ * @param url the URL struct to store the user URL input
+ * @return int 0 in case of success, int -1 in case of error
+ */
 int parseFTPUrl(const char *input, struct URL *url)
 {
     regex_t regex;
@@ -8,7 +15,7 @@ int parseFTPUrl(const char *input, struct URL *url)
     // Validate the URL structure
     if (regcomp(&regex, SLASH, 0) != 0 || regexec(&regex, input, 0, NULL, 0) != 0)
     {
-        exit(-1);
+        return -1;
     }
 
     // Check for user:password in URL
@@ -38,7 +45,7 @@ int parseFTPUrl(const char *input, struct URL *url)
     if (strlen(url->host) == 0 || (h = gethostbyname(url->host)) == NULL)
     {
         fprintf(stderr, "Invalid hostname: '%s'\n", url->host);
-        exit(-1);
+        return -1;
     }
 
     strcpy(url->ip, inet_ntoa(*((struct in_addr *) h->h_addr)));
@@ -53,6 +60,13 @@ int parseFTPUrl(const char *input, struct URL *url)
     return 0;
 }
 
+/**
+ * @brief Creates a socket with the ip and port provided
+ * 
+ * @param ip the socket ip
+ * @param port the socket port
+ * @return int sockfd or -1 in case of error
+ */
 int createSocket(char *ip, int port)
 {
     int sockfd;
@@ -68,7 +82,7 @@ int createSocket(char *ip, int port)
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
         perror("Error: could not create socket");
-        exit(-1);
+        return -1;
     }
 
     // Connect to the server
@@ -77,12 +91,20 @@ int createSocket(char *ip, int port)
                 sizeof(server_addr)) < 0)
     {
         perror("Error: Could not connect to the server");
-        exit(-1);
+        return -1;
     }
 
     return sockfd;
 }
 
+/**
+ * @brief Attempts to authenticate the user with the credentials provided in the url (or the default anonymous ones)
+ * 
+ * @param user The username to authenticate
+ * @param password The user's password
+ * @param socket The endpoint to write data to
+ * @return The server's response code or -1 in case of error
+ */
 int authenticate(const char *user, const char *password, const int socket)
 {
     char usr[5 + strlen(user) + 2];
@@ -96,13 +118,20 @@ int authenticate(const char *user, const char *password, const int socket)
     if (readResponse(socket, answer) != HOST_PASS_READY)
     {
         printf("Unknown user '%s'\n", user);
-        exit(-1);
+        return -1;
     }
 
     write(socket, pass, strlen(pass));
     return readResponse(socket, answer);
 }
 
+/**
+ * @brief Reads the response from the server and prints it out to the CLI. Returns the response code.
+ * 
+ * @param socket The endpoint to read data from
+ * @param buffer The buffer to store the line from the server with relevant information such as ip address for data socket
+ * @return The response code from the server or -1 in case of error
+ */
 int readResponse(const int socket, char* buffer) {
     memset(buffer, 0, BUFFER_SIZE);
     char recv_buffer[BUFFER_SIZE] = {0};
@@ -112,7 +141,7 @@ int readResponse(const int socket, char* buffer) {
     int is_multi_line = 0; // Initialize to avoid using uninitialized value
 
     while (1) {
-        // Read BUFFER_SIZE (512 atm) bytes from the socket and put them in buffer
+        // Read BUFFER_SIZE (1024 atm) bytes from the socket and put them in buffer
         ssize_t bytes_received = recv(socket, recv_buffer, BUFFER_SIZE - 1, 0);
         if (bytes_received < 0) {
             printf("Error: Error reading from socket.\n");
@@ -171,7 +200,14 @@ int readResponse(const int socket, char* buffer) {
     return code;
 }
 
-
+/**
+ * @brief Attempts to start passive mode communication with the server
+ * 
+ * @param socket The control socket
+ * @param ip Char array to store the calculated ip for the data socket
+ * @param port Integer to store the port for the data socket
+ * @return PASSIVE response code in case of success, -1 otherwise
+ */
 int startPassiveMode(const int socket, char *ip, int *port) {
     char answer[BUFFER_SIZE];
     int ip_p1, ip_p2, ip_p3, ip_p4, port1, port2;
@@ -186,6 +222,13 @@ int startPassiveMode(const int socket, char *ip, int *port) {
     return PASSIVE;
 }
 
+/**
+ * @brief Sends request for resource specified to control socket
+ * 
+ * @param socket Control socket
+ * @param resource Char array with the resource name
+ * @return Server response code
+ */
 int requestResource(const int socket, char *resource) {
     char file[5+strlen(resource)+2];
     char answer[BUFFER_SIZE];
@@ -195,6 +238,14 @@ int requestResource(const int socket, char *resource) {
     return readResponse(socket, answer);
 }
 
+/**
+ * @brief Downloads requested resource to specified filename and then closes data socket
+ * 
+ * @param socket1 Control socket
+ * @param socket2 Data socket
+ * @param filename The filename to store the resource under
+ * @return Response code from the server or -1 in case of error
+ */
 int downloadResource(const int socket1, const int socket2, char* filename) {
     FILE* fd = fopen(filename, "wb");
     char buffer[BUFFER_SIZE];
@@ -203,7 +254,7 @@ int downloadResource(const int socket1, const int socket2, char* filename) {
 
     if (fd == NULL) {
         printf("Error: could not open file %s.\n", filename);
-        exit(-1);
+        return -1;
     }
     
     while ((bytes = recv(socket2, buffer, BUFFER_SIZE, 0)) > 0) {
@@ -217,12 +268,19 @@ int downloadResource(const int socket1, const int socket2, char* filename) {
     return readResponse(socket1, buffer);
 }
 
-int endFTP(const int socket1, const int socket2) {
+/**
+ * @brief Closes FTP connection with server gracefully
+ * 
+ * @param socket1 Control socket
+ *
+ * @return close(socket1), -1 in case of error
+ */
+int endFTP(const int socket1) {
     char answer[BUFFER_SIZE];
     write(socket1, "quit\r\n", 6);
     if (readResponse(socket1, answer) != CLOSE_CONNECTION) {
         printf("Error: could not terminate connection.\n");
-        exit(-1);
+        return -1;
     }
     return close(socket1);
 }
@@ -289,7 +347,7 @@ int main(int argc, char* argv[]) {
 
     printf("Resource downloaded. Ending connection.\n");
 
-    if (endFTP(socketControl, socketData) < 0) {
+    if (endFTP(socketControl) < 0) {
         printf("Error: Error when closing connection.\n");
         exit(-1);
     }

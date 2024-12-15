@@ -12,20 +12,21 @@
 #define BUFFER_SIZE 1024
 #define FTP_PORT   21
 
+// Default anonymous credentials (might have to be adjusted in feup's lab because no one told us the credentials)
 #define DEFAULT_USER        "anonymous"
-#define DEFAULT_PASSWORD    "password"
+#define DEFAULT_PASSWORD    "password" // some sites request the user's email as the password but will accept just any value
 
 // Parser regex
 #define AT              "@"
 #define SLASH           "/"
 #define HOST_REGEX      "%*[^/]//%[^/]"
 #define HOST_AT_REGEX   "%*[^/]//%*[^@]@%[^/]"
-#define RESOURCE_REGEX  "%*[^/]//%*[^/]/%s"
-#define USER_REGEX      "%*[^/]//%[^:/]"
 #define PASS_REGEX      "%*[^/]//%*[^:]:%[^@\n$]"
-#define RESPCODE_REGEX  "%d"
+#define USER_REGEX      "%*[^/]//%[^:/]"
+#define RESOURCE_REGEX  "%*[^/]//%*[^/]/%s"
 #define PASSIVE_REGEX   "%*[^(](%d,%d,%d,%d,%d,%d)%*[^\n$)]"
 
+// Server responses
 #define HOST_TRANSFER_READY 150
 #define DATA_ALREADY_OPEN   125
 #define HOST_AUTH_READY     220
@@ -45,15 +46,6 @@ struct URL {
     char ip[BUFFER_SIZE];
 };
 
-
-// TODO: temporary 
-typedef enum {
-    START,
-    SINGLE,
-    MULTIPLE,
-    END
-} ResponseState;
-
 int parseFTPUrl(const char* input, struct URL* url);
 
 int createSocket(char* ip, int port);
@@ -70,4 +62,4 @@ int requestResource(const int socket, char* resource);
 
 int downloadResource(const int socket1, const int socker2, char* filename);
 
-int endFTP(const int socket1, const int socket2);
+int endFTP(const int socket1);
