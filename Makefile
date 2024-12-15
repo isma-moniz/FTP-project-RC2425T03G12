@@ -5,8 +5,8 @@ SRC = src/
 INCLUDE = include/
 BIN = bin/
 
-.PHONY: downloader
-downloader: $(SRC)/main.c
+.PHONY: download
+download: $(SRC)/main.c
 	$(CC) $(CFLAGS) -o download $^
 
 .PHONY: clean
